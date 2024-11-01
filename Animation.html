@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Interactive Ripple Effect with Smooth Sound</title>
+    <title>Interactive Ripple Effect with Smooth Sound (Tone.js)</title>
     <style>
-        /* Basic styling for the body */
         body {
             margin: 0;
             height: 100vh;
@@ -16,7 +15,6 @@
             position: relative;
         }
 
-        /* Ripple effect */
         .ripple {
             position: absolute;
             border-radius: 50%;
@@ -32,16 +30,14 @@
             }
         }
     </style>
+    <!-- Include Tone.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.35/Tone.js"></script>
 </head>
 <body>
     <script>
-        // Initialize Web Audio API
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        let oscillator;
-        let gainNode;
+        const synth = new Tone.Synth().toDestination();
         let isMouseDown = false;
 
-        // Function to create ripple effect
         function createRipple(x, y) {
             const ripple = document.createElement('span');
             ripple.classList.add('ripple');
@@ -55,45 +51,37 @@
             });
         }
 
-        // Function to calculate frequency based on vertical position
         function calculateFrequency(y) {
             const windowHeight = window.innerHeight;
-            const minFreq = 100; // Low tone frequency
-            const maxFreq = 1000; // High tone frequency
+            const minFreq = 100;
+            const maxFreq = 1000;
             return minFreq + ((maxFreq - minFreq) * (1 - y / windowHeight));
         }
 
-        // Handle mousedown event
-        document.body.addEventListener('mousedown', function(e) {
-            isMouseDown = true;
-            // Create and start oscillator and gain node
-            oscillator = audioCtx.createOscillator();
-            gainNode = audioCtx.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(calculateFrequency(e.clientY), audioCtx.currentTime);
-            oscillator.connect(gainNode).connect(audioCtx.destination);
-            gainNode.gain.setValueAtTime(1, audioCtx.currentTime); // Start at full volume
-            oscillator.start();
-            createRipple(e.clientX, e.clientY);
-        });
+        document.body.addEventListener('mousedown', async function(e) {
+            if (!isMouseDown) { 
+                isMouseDown = true;
+                await Tone.start(); // Ensure Tone.js context is started
 
-        // Handle mousemove event
-        document.body.addEventListener('mousemove', function(e) {
-            if (isMouseDown) {
-                oscillator.frequency.setValueAtTime(calculateFrequency(e.clientY), audioCtx.currentTime);
+                synth.triggerAttack(calculateFrequency(e.clientY));
                 createRipple(e.clientX, e.clientY);
             }
         });
 
-        // Handle mouseup event
-        document.body.addEventListener('mouseup', function() {
-            isMouseDown = false;
-            // Fade out the gain
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.1);
-            oscillator.stop(audioCtx.currentTime + 1.1); // Stop the oscillator after the fade-out
+        document.body.addEventListener('mousemove', function(e) {
+            if (isMouseDown) {
+                synth.setNote(calculateFrequency(e.clientY));
+                createRipple(e.clientX, e.clientY);
+            }
         });
 
-        // Continuously create ripples while mouse is down
+        document.body.addEventListener('mouseup', function() {
+            if (isMouseDown) {
+                isMouseDown = false;
+                synth.triggerRelease(Tone.now() + 0.1); // Smooth fade-out over 0.1 seconds
+            }
+        });
+
         setInterval(() => {
             if (isMouseDown) {
                 createRipple(lastX, lastY);
