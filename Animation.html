@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Interactive Ripple Effect with Smooth Sound (Tone.js)</title>
+    <title>Interactive Ripple Effect with Chord Sound (Tone.js)</title>
     <style>
         body {
             margin: 0;
@@ -35,8 +35,18 @@
 </head>
 <body>
     <script>
-        const synth = new Tone.Synth().toDestination();
+        const synths = [
+            new Tone.Synth().toDestination(),
+            new Tone.Synth().toDestination(),
+            new Tone.Synth().toDestination(),
+            new Tone.Synth().toDestination()
+        ];
         let isMouseDown = false;
+
+        // Start Tone.js context on page load to reduce latency
+        window.addEventListener('load', () => {
+            Tone.start();
+        });
 
         function createRipple(x, y) {
             const ripple = document.createElement('span');
@@ -58,29 +68,64 @@
             return minFreq + ((maxFreq - minFreq) * (1 - y / windowHeight));
         }
 
-        document.body.addEventListener('mousedown', async function(e) {
-            if (!isMouseDown) { 
+        function getMajor7thFrequencies(rootFreq) {
+            const majorThird = rootFreq * Math.pow(2, 4 / 12); // Major third
+            const perfectFifth = rootFreq * Math.pow(2, 7 / 12); // Perfect fifth
+            const majorSeventh = rootFreq * Math.pow(2, 11 / 12); // Major seventh
+            return [rootFreq, majorThird, perfectFifth, majorSeventh];
+        }
+
+        function handleStart(e) {
+            if (!isMouseDown) {
                 isMouseDown = true;
-                await Tone.start(); // Ensure Tone.js context is started
+                const clientX = e.clientX || e.touches[0].clientX;
+                const clientY = e.clientY || e.touches[0].clientY;
 
-                synth.triggerAttack(calculateFrequency(e.clientY));
-                createRipple(e.clientX, e.clientY);
+                synths.forEach(synth => synth.triggerAttackRelease("C4", "8n"));
+
+                const rootFrequency = calculateFrequency(clientY);
+                const frequencies = getMajor7thFrequencies(rootFrequency);
+
+                frequencies.forEach((freq, index) => {
+                    synths[index].triggerAttack(freq);
+                });
+
+                createRipple(clientX, clientY);
             }
-        });
+        }
 
-        document.body.addEventListener('mousemove', function(e) {
+        function handleMove(e) {
             if (isMouseDown) {
-                synth.setNote(calculateFrequency(e.clientY));
-                createRipple(e.clientX, e.clientY);
-            }
-        });
+                const clientX = e.clientX || e.touches[0].clientX;
+                const clientY = e.clientY || e.touches[0].clientY;
 
-        document.body.addEventListener('mouseup', function() {
+                const rootFrequency = calculateFrequency(clientY);
+                const frequencies = getMajor7thFrequencies(rootFrequency);
+
+                frequencies.forEach((freq, index) => {
+                    synths[index].setNote(freq);
+                });
+
+                createRipple(clientX, clientY);
+            }
+        }
+
+        function handleEnd() {
             if (isMouseDown) {
                 isMouseDown = false;
-                synth.triggerRelease(Tone.now() + 0.1); // Smooth fade-out over 0.1 seconds
+                synths.forEach(synth => {
+                    synth.triggerRelease(Tone.now() + 0.1); // Smooth fade-out over 0.1 seconds
+                });
             }
-        });
+        }
+
+        document.body.addEventListener('mousedown', handleStart);
+        document.body.addEventListener('mousemove', handleMove);
+        document.body.addEventListener('mouseup', handleEnd);
+
+        document.body.addEventListener('touchstart', handleStart);
+        document.body.addEventListener('touchmove', handleMove);
+        document.body.addEventListener('touchend', handleEnd);
 
         setInterval(() => {
             if (isMouseDown) {
@@ -97,6 +142,16 @@
             if (isMouseDown) {
                 lastX = e.clientX;
                 lastY = e.clientY;
+            }
+        });
+        document.body.addEventListener('touchstart', (e) => {
+            lastX = e.touches[0].clientX;
+            lastY = e.touches[0].clientY;
+        });
+        document.body.addEventListener('touchmove', (e) => {
+            if (isMouseDown) {
+                lastX = e.touches[0].clientX;
+                lastY = e.touches[0].clientY;
             }
         });
     </script>
