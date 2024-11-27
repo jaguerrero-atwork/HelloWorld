@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Interactive Ripple Effect with Chord Sound (Tone.js)</title>
+    <title>Interactive Ripple Effect with Dynamic Chord Display and Rhythm Beat (Tone.js and Howler.js)</title>
+    <!-- Include Google Font Instrument Serif -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:wght@400;700&display=swap">
     <style>
         body {
             margin: 0;
@@ -29,11 +31,91 @@
                 opacity: 0;
             }
         }
+
+        .chord-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .frequency-text {
+            width: 100%;
+            font-size: 12em;
+            color: #000000;
+            font-family: 'Instrument Serif', serif;
+            text-align: center;
+        }
+
+        .chord-text {
+            font-size: 2em;
+            color: rgba(0, 0, 0, 0.1);
+            font-family: 'Helvetica', sans-serif;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .sequencer {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .step {
+            width: 30px;
+            height: 30px;
+            border: 2px solid black;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .step.active {
+            background-color: black;
+        }
+
+        .transport-controls {
+            margin-top: 15px;
+        }
+
+        .transport-controls button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
     </style>
     <!-- Include Tone.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.35/Tone.js"></script>
+    <!-- Include Howler.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
 </head>
 <body>
+    <div class="chord-display">
+        <div class="frequency-text" id="frequencyText"></div>
+        <div class="chord-text">Major 7th Chord</div>
+    </div>
+    <div class="controls">
+        <div class="sequencer" id="sequencer">
+            <!-- Steps will be added here via JavaScript -->
+        </div>
+        <div class="transport-controls">
+            <button id="startButton">Start Beat</button>
+            <button id="stopButton">Stop Beat</button>
+        </div>
+    </div>
     <script>
         const synths = [
             new Tone.Synth().toDestination(),
@@ -43,10 +125,11 @@
         ];
         let isMouseDown = false;
 
-        // Start Tone.js context on page load to reduce latency
-        window.addEventListener('load', () => {
-            Tone.start();
-        });
+        // Start Tone.js context on user interaction to reduce latency
+        async function startToneContext() {
+            await Tone.start();
+            console.log('Tone.js context started');
+        }
 
         function createRipple(x, y) {
             const ripple = document.createElement('span');
@@ -75,6 +158,11 @@
             return [rootFreq, majorThird, perfectFifth, majorSeventh];
         }
 
+        function updateChordDisplay(rootFreq) {
+            const frequencyText = document.getElementById('frequencyText');
+            frequencyText.textContent = `${rootFreq.toFixed(2)} Hz`;
+        }
+
         function handleStart(e) {
             if (!isMouseDown) {
                 isMouseDown = true;
@@ -90,6 +178,7 @@
                     synths[index].triggerAttack(freq);
                 });
 
+                updateChordDisplay(rootFrequency);
                 createRipple(clientX, clientY);
             }
         }
@@ -106,6 +195,7 @@
                     synths[index].setNote(freq);
                 });
 
+                updateChordDisplay(rootFrequency);
                 createRipple(clientX, clientY);
             }
         }
@@ -153,6 +243,84 @@
                 lastX = e.touches[0].clientX;
                 lastY = e.touches[0].clientY;
             }
+        });
+
+        // Create a simple kick drum sound using Tone.js
+        const kick = new Tone.MembraneSynth({
+            pitchDecay: 0.05,
+            octaves: 4,
+            oscillator: {
+                type: "sine"
+            },
+            envelope: {
+                attack: 0.001,
+                decay: 0.2,
+                sustain: 0,
+                release: 0.2
+            }
+        }).toDestination();
+
+        // Create an array to store the step states (false = inactive, true = active)
+        let steps = new Array(16).fill(false);
+
+        // Create the sequencer steps
+        const sequencer = document.getElementById('sequencer');
+        steps.forEach((_, index) => {
+            const step = document.createElement('div');
+            step.className = 'step';
+            step.addEventListener('click', () => toggleStep(index));
+            sequencer.appendChild(step);
+        });
+
+        // Function to toggle step state
+        function toggleStep(index) {
+            steps[index] = !steps[index];
+            const stepElement = sequencer.children[index];
+            stepElement.classList.toggle('active');
+        }
+
+        // Modify the loop to use the step sequence
+        let currentStep = 0;
+        const loop = new Tone.Loop(time => {
+            if (steps[currentStep]) {
+                kick.triggerAttackRelease("C1", "8n", time);
+            }
+            
+            // Highlight current step
+            Array.from(sequencer.children).forEach((step, index) => {
+                if (index === currentStep) {
+                    step.style.borderColor = '#ff0000';
+                } else {
+                    step.style.borderColor = '#000000';
+                }
+            });
+
+            currentStep = (currentStep + 1) % 16;
+        }, "16n");  // Changed to 16th notes for more precise timing
+
+        // Update the start/stop handlers
+        document.getElementById('startButton').addEventListener('click', async () => {
+            try {
+                await Tone.start();
+                Tone.Transport.bpm.value = 120;
+                currentStep = 0;  // Reset step counter
+                loop.start(0);
+                Tone.Transport.start();
+                console.log('Beat started');
+            } catch (error) {
+                console.error('Error starting beat:', error);
+            }
+        });
+
+        document.getElementById('stopButton').addEventListener('click', () => {
+            Tone.Transport.stop();
+            loop.stop();
+            currentStep = 0;
+            // Reset step highlighting
+            Array.from(sequencer.children).forEach(step => {
+                step.style.borderColor = '#000000';
+            });
+            console.log('Beat stopped');
         });
     </script>
 </body>
